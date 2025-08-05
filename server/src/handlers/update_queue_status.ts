@@ -1,18 +1,42 @@
 
+import { db } from '../db';
+import { queueTable } from '../db/schema';
 import { type UpdateQueueStatusInput, type Queue } from '../schema';
+import { eq } from 'drizzle-orm';
 
-export async function updateQueueStatus(input: UpdateQueueStatusInput): Promise<Queue> {
-    // This is a placeholder declaration! Real code should be implemented here.
-    // The goal of this handler is updating queue status and setting appropriate timestamps
-    // (called_at when status becomes 'called', served_at when status becomes 'served').
-    return Promise.resolve({
-        id: input.id,
-        queue_number: 1,
-        customer_name: null,
-        status: input.status,
-        created_at: new Date(),
-        called_at: input.status === 'called' ? new Date() : null,
-        served_at: input.status === 'served' ? new Date() : null,
-        queue_date: new Date()
-    } as Queue);
-}
+export const updateQueueStatus = async (input: UpdateQueueStatusInput): Promise<Queue> => {
+  try {
+    // Prepare update values with timestamps based on status
+    const updateValues: any = {
+      status: input.status
+    };
+
+    // Set appropriate timestamps based on status
+    if (input.status === 'called') {
+      updateValues.called_at = new Date();
+    } else if (input.status === 'served') {
+      updateValues.served_at = new Date();
+    }
+
+    // Update queue record
+    const result = await db.update(queueTable)
+      .set(updateValues)
+      .where(eq(queueTable.id, input.id))
+      .returning()
+      .execute();
+
+    if (result.length === 0) {
+      throw new Error(`Queue item with id ${input.id} not found`);
+    }
+
+    // Convert queue_date from string to Date for return type
+    const queueItem = result[0];
+    return {
+      ...queueItem,
+      queue_date: new Date(queueItem.queue_date)
+    };
+  } catch (error) {
+    console.error('Queue status update failed:', error);
+    throw error;
+  }
+};
